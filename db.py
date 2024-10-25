@@ -31,7 +31,7 @@ class DriverDB:
         self.session.add(new_entry)
         self.session.commit()
 
-    def history(self, user_id: int) -> list[str, ...]:
+    def history(self, user_id: int) -> list[str, ]:
         result = list(self.session.query(ImageHistory).filter_by(user_id=user_id))
         if result:
             text = ["История обработанных изображений.", ]
