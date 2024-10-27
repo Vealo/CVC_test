@@ -1,54 +1,85 @@
 import os
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import create_engine, Column, Integer, String, Sequence, DateTime
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, Sequence
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
 Base: declarative_base = declarative_base()
+
 
 class ImageHistory(Base):
     __tablename__ = 'image_history'
     id = Column(Integer, Sequence('image_id_seq'), primary_key=True)
-    user_id = Column(String)
-    datess = Column(DateTime, default=datetime.today())
+    user_id = Column(Integer)
     file_id = Column(String)
     text = Column(String)
+    datess = Column(DateTime)
+
+
+@dataclass
+class ImageHistoryEntity:
+    user_id: int
+    file_id: str
+    text: str
+    datess: datetime
+
+
+class ImageHistoryRepository(ABC):
+    @abstractmethod
+    def add(self, entity: ImageHistoryEntity) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_history(self, user_id: int) -> list[str]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def clear_history(self, user_id: int) -> str:
+        raise NotImplementedError
+
+
+class SqlAlchemyImageHistoryRepository(ImageHistoryRepository):
+    def __init__(self, session: Session):
+        self.session = session
+
+    def add(self, entity: ImageHistoryEntity) -> None:
+        row = ImageHistory(
+            user_id=entity.user_id,
+            file_id=entity.file_id,
+            text=entity.text,
+            datess=entity.datess
+        )
+        self.session.add(row)
+        self.session.commit()
+
+    def get_history(self, user_id: int) -> list[str]:
+        result = self.session.query(ImageHistory).filter_by(user_id=user_id).all()
+        if result:
+            return [f"Дата: {row.datess}\nСообщение: {i + 1}\nРаспознано:\n{row.text}"
+                    for i, row in enumerate(result)]
+        return ["История пуста."]
+
+    def clear_history(self, user_id: int) -> str:
+        deleted_count = self.session.query(ImageHistory).filter_by(user_id=user_id).delete()
+        self.session.commit()
+        return 'История очищена.' if deleted_count > 0 else "История пуста"
+
 
 class DriverDB:
     engine = None
     session_maker = None
+
     @classmethod
-    def create_db(cls, DATABASE_URL):
+    def create_db(cls, database_url):
         if cls.engine is None and cls.session_maker is None:
-            cls.engine = create_engine(f'sqlite:///{DATABASE_URL}', echo=False)
+            cls.engine = create_engine(f'sqlite:///{database_url}', echo=True)
             cls.session_maker = sessionmaker(bind=cls.engine)
-        if not os.path.exists(DATABASE_URL):
-            Base.metadata.create_all(cls.engine)
+            if not os.path.exists(database_url):
+                Base.metadata.create_all(cls.engine)
 
     @classmethod
-    def add(cls, file_id: str, text: str, user_id: int) -> None:
-        with cls.session_maker() as session:
-            row = ImageHistory(file_id=file_id, text=text, user_id=user_id)
-            session.add(row)
-            session.commit()
-
-    @classmethod
-    def history(cls, user_id: int) -> list[str, ]:
-        with cls.session_maker() as session:
-            result = list(session.query(ImageHistory).filter_by(user_id=user_id))
-            if result:
-                text = ["История обработанных изображений.", ]
-                for number, row in enumerate(result, start=1):
-                    text.append(f"Дата: {row.datess}\nСообщение: {number}\nРаспознано:\n{row.text}")
-            else:
-                text = ["История пуста.", ]
-        return text
-
-    @classmethod
-    def clear(cls, user_id: int) -> str:
-        result = "'При удалении возникла ошибка.'"
-        with cls.session_maker() as session:
-            session.query(ImageHistory).filter_by(user_id=user_id).delete()
-            session.commit()
-            result = 'История очищена.'
-        return result
+    def get_repository(cls) -> SqlAlchemyImageHistoryRepository:
+        session = cls.session_maker()
+        return SqlAlchemyImageHistoryRepository(session)
