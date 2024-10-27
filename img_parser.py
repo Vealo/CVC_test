@@ -17,5 +17,3 @@ class ImgParser:
     def parser(self, photo: Any, cls: bool=True) -> str:
         result = "\n".join([line[1][0] for line in self.ocr.ocr(photo, cls=cls)[0]])
         return result
-
-

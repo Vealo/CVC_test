@@ -1,23 +1,37 @@
-import os
 import logging
 
-import dotenv
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import Message
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from imgParser import ImgParser
+from img_parser import ImgParser
 from db import DriverDB
 
-dotenv.load_dotenv('.env')
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-DATABASE_URL = os.getenv('DATABASE_URL')
+class AppConfig(BaseSettings):
+    '''
+    Загружаем данные из переменных окружения или из файла .env
+    '''
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="forbid",
+    )
+    BOT_TOKEN: str = Field(min_length=35)
+    DATABASE_URL: str = Field(min_length=5)
+
+app_config = AppConfig()
+BOT_TOKEN = app_config.BOT_TOKEN
+DATABASE_URL = app_config.DATABASE_URL
+
 logging.basicConfig(level=logging.INFO)
 storage = MemoryStorage()
 
-db = DriverDB(DATABASE_URL)
-db.create_db()
+db = DriverDB()
+db.create_db(DATABASE_URL)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -28,36 +42,24 @@ async def process_start_command(message: Message):
     '''
     Приветственное сообщение, ответ на команду: /start
     '''
-    await message.answer(
-'''Привет!
-CVC-бот!
-Я могу читать текст на картинках. Давай попробуем!''')
+    await message.answer('''Привет!\nCVC-бот!\nЯ могу читать текст на картинках. Давай попробуем!''')
 
 @dp.message(Command(commands='help'))
 async def process_help_command(message: Message):
     '''
     Информация о поддерживаемых командах: /help
     '''
-    await message.answer(
-'''/start - Приветственное сообщение
-/lang - Перечень часто используемых языков
-/setlang - смена языка распознавания
-/history - показать историю распознания изображений
-/history_clear - очистить историю
-Пришли мне изображение, а я попробую прочитать текст.''')
+    await message.answer('''/start - Приветственное сообщение\n/lang - Перечень часто используемых языков\
+\n/setlang - смена языка распознавания\n/history - показать историю распознания изображений\
+\n/history_clear - очистить историю\nПришли мне изображение, а я попробую прочитать текст.''')
 
 @dp.message(Command(commands='lang'))
 async def process_help_command(message: Message):
     '''
     Список поддерживаемых языков: /lang
     '''
-    await message.answer(
-'''Russian - ‘ru’
-English - ‘en’
-German - ‘german’
-Italian - ‘it’
-French - ‘fr’
-Поддерживаются только эти языки.''')
+    await message.answer('''Russian - ‘ru’\nEnglish - ‘en’\nGerman - ‘german’\nItalian - ‘it’\
+\nFrench - ‘fr’\nПоддерживаются только эти языки.''')
 
 @dp.message(Command(commands='setlang'))
 async def set_language(message: types.Message):
@@ -97,11 +99,10 @@ async def handle_photo(message: types.Message):
         downloaded_file = await bot.download_file(file_info.file_path)
         user_id = message.from_user.id
 
-        text = parser.parser(downloaded_file.read()) or "Текст не распознан."
-        db.add(file_id=file_id, text=text, user_id=user_id)
-
-        await message.reply(text)
-
+        text = parser.parser(downloaded_file.read())
+        if text:
+            db.add(file_id=file_id, text=text, user_id=user_id)
+        await message.reply(text or "Текст не распознан.")
     except Exception as e:
         logging.error(f"Ошибка при обработке изображения: {e}")
         await message.reply("Произошла ошибка при обработке изображения.")
@@ -112,7 +113,6 @@ async def send_echo(message: Message):
     Заглушка на все неподдерживаемые команды и типы сообщений
     '''
     await message.answer(text='Воспользуйтесь справкой /help')
-
 
 if __name__ == '__main__':
     dp.run_polling(bot)

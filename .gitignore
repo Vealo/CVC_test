@@ -66,4 +66,4 @@ docs/html
 
 # pynev
 .python-version
-
+.env
