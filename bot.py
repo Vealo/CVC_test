@@ -8,14 +8,15 @@ from aiogram.types import Message
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from db import DriverDB, ImageHistoryEntity
+from db.db import DriverDB
+from db.models import ImageHistoryEntity
 from img_parser import ImgParser
 
 
 class AppConfig(BaseSettings):
-    '''
-    Загружаем данные из переменных окружения или из файла .env
-    '''
+    """
+    Загружаем токен и путь к базе.
+    """
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -43,17 +44,17 @@ parser = ImgParser()
 
 @dp.message(Command(commands='start'))
 async def process_start_command(message: Message):
-    '''
+    """
     Приветственное сообщение, ответ на команду: /start
-    '''
+    """
     await message.answer('''Привет!\nCVC-бот!\nЯ могу читать текст на картинках. Давай попробуем!''')
 
 
 @dp.message(Command(commands='help'))
 async def process_help_command(message: Message):
-    '''
+    """
     Информация о поддерживаемых командах: /help
-    '''
+    """
     await message.answer('''/start - Приветственное сообщение\n/lang - Перечень часто используемых языков\
 \n/setlang - смена языка распознавания\n/history - показать историю распознания изображений\
 \n/history_clear - очистить историю\nПришли мне изображение, а я попробую прочитать текст.''')
@@ -61,27 +62,27 @@ async def process_help_command(message: Message):
 
 @dp.message(Command(commands='lang'))
 async def process_help_command(message: Message):
-    '''
+    """
     Список поддерживаемых языков: /lang
-    '''
+    """
     await message.answer('''Russian - ‘ru’\nEnglish - ‘en’\nGerman - ‘german’\nItalian - ‘it’\
 \nFrench - ‘fr’\nПоддерживаются только эти языки.''')
 
 
 @dp.message(Command(commands='setlang'))
 async def set_language(message: types.Message):
-    '''
+    """
     Смена языка: /setlang <язык>
-    '''
+    """
     lang = message.text.strip().split()[-1].lower()
     await message.reply(parser.set_lang(lang))
 
 
 @dp.message(Command(commands='history'))
 async def show_history(message: types.Message):
-    '''
+    """
     Показывает историю парсинга сообщений: /history
-    '''
+    """
     user_id = message.from_user.id
     for msg in db.get_history(user_id):
         await message.answer(msg)
@@ -89,9 +90,9 @@ async def show_history(message: types.Message):
 
 @dp.message(Command(commands='history_clear'))
 async def show_history(message: types.Message):
-    '''
+    """
     Очистить историю: /history_clear
-    '''
+    """
     user_id = message.from_user.id
     text = db.clear_history(user_id=user_id)
     await message.answer(text=text)
@@ -99,9 +100,9 @@ async def show_history(message: types.Message):
 
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
-    '''
+    """
     Распознание текста на изображении: при получении изображения
-    '''
+    """
     try:
         file_id = message.photo[-1].file_id
         file_info = await bot.get_file(file_id)
@@ -119,9 +120,9 @@ async def handle_photo(message: types.Message):
 
 @dp.message()
 async def send_echo(message: Message):
-    '''
+    """
     Заглушка на все неподдерживаемые команды и типы сообщений
-    '''
+    """
     await message.answer(text='Воспользуйтесь справкой /help')
 
 
